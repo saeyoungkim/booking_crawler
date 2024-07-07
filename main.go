@@ -1,0 +1,450 @@
+package main
+
+import (
+	"booking/data"
+	"context"
+	"fmt"
+	"log"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/chromedp"
+)
+
+const PAGE_LOAD = 25
+const DIALOG_PATH = `div[role="dialog"]`
+const DIALOG_CLOSE_PATH = `div[role="dialog"] > div > div > div > div > button`
+const LOAD_BUTTON_XPATH = "//span[text()='Load more results']"
+const CURRENCY_MODAL_OPEN_BTN_PATH = `button[data-testid="header-currency-picker-trigger"]`
+const MODAL_PATH = `div[data-testid="selection-modal"]`
+const USD_CURRENCY_BTN_PATH = "//div[text()='USD']"
+const LANGUAGE_MODAL_OPEN_BTN_PATH = `button[data-testid="header-language-picker-trigger"]`
+const ENG_BTN_PATH = "//span[text()='English (US)']"
+const END_LAYOUT_PATH = "div.bottom_of_basiclayout"
+const FOOTER_PATH = "#footer_menu_track"
+const TAG_PATH = `span[data-testid="facility-icon"] ~ div > span > div > span`
+const DESCRIPTION_PATH = `p[data-testid="property-description"]`
+const AVAIALABILITY_PATH = `table#hprt-table > tbody tr`
+const ROOMTYPE_CELL_PATH = "td.hprt-table-cell-roomtype"
+const OCCUPANCY_CELL_PATH = "td.hprt-table-cell-occupancy"
+const ADULTS_OCCUPANCY_PATH = "span.c-occupancy-icons__adults > i"
+const CHILDREN_OCCUPANCY_PATH = "span.c-occupancy-icons__children > i"
+const OCCUPANCY_PATH = "div.hprt-occupancy-occupancy-info > span.bui-u-sr-only"
+const PRICE_CELL_PATH = "td.hprt-table-cell-price"
+const CONDITIONS_CELL_PATH = "td.hprt-table-cell-conditions"
+const ROOM_MODAL_OPEN_PATH = `a.hprt-roomtype-link`
+const ROOM_NAME_PATH = "h1#hp_rt_room_gallery_modal_room_name"
+const ROOM_DETAIL_CONTAINER = `div.hprt-lightbox-right-container`
+const ROOM_SIZE_PATH = `//div[class="hprt-lightbox-right-container"]/h2[1]/following-sibling::text()[1]`
+const ROOM_DETAIL_CONTAINER_IF_NO_PICTURE = `div.hprt-lightbox-left-container`
+const ROOM_SIZE_PATH_IF_NO_PICTURE = `//div[class="hprt-lightbox-left-container"]/h2[1]/following-sibling::text()[1]`
+const ROOM_TYPE_PATH = `div.hprt-roomtype-bed`
+const ROOM_TAGS_PATH = `div.hprt-facilities-facility`
+const FEE_PATH = `div.prd-taxes-and-fees-under-price`
+const CANCELATION_PATH = `ul li.e2e-cancellation`
+const ROOM_MODAL_CLOSE_BTN_PATH = "button.modal-mask-closeBtn"
+const POLICY_MODAL_PATH = `button[data-testid="policy-modal-trigger"]`
+const MEAL_DESCRPTION_PATH = `div.bui-group > div:nth-of-type(1) > div.bui-group > div.bui-group__item:nth-of-type(1) > div`
+const CANCELATION_SUMMARY_PATH = `div.bui-group > div:nth-of-type(2) > div.bui-group > div.bui-group__item:nth-of-type(1) > div.bui-group:nth-of-type(1) > div.bui-group__item:nth-of-type(2) > div.bui-group:nth-of-type(1) > div.bui-group__item:nth-of-type(1) > span > strong`
+const FREE_CANCELATION_STRONG_PATH = "//strong[contains(text(),'Free cancellation')]"
+const POLICY_MODAL_CLOSE_BTN_PATH = `button[data-bui-ref="modal-close"]`
+const GUEST_REVIEW_PATH = `div[data-testid="PropertyReviewsRegionBlock"]`
+const ALL_REVIEW_SCORE_PATH = `div[data-testid="review-score-right-component"] > div:nth-of-type(1) > div`
+const ALL_REVIEW_COUNT_PATH = `div[data-testid="review-score-right-component"] > div:nth-of-type(2) > div:nth-of-type(2)`
+const REVIEW_SUBSCORE_PATH = `div[data-testid="PropertyReviewsRegionBlock"] > div:nth-of-type(3) > div > div:nth-of-type(2) > div > div[data-testid="review-subscore"]`
+const SUB_CATEGORY_NAME_PATH = `div > div:nth-of-type(1) > div:nth-of-type(1) > div > span`
+const SUB_CATEGORY_SCORE_PATH = `div > div:nth-of-type(1) > div:nth-of-type(2) > div`
+const ROOM_DETAIL_DIALOG_PATH = `div[aria-label="dialog"]`
+
+func searchAccomodationLinks(ctx context.Context, destination string, checkin string, checkout string, adults int, children int, rooms int) ([]string, error) {
+	indexUrl := fmt.Sprintf("https://www.booking.com/searchresults.en-gb.html?ss=%s&checkin=%s&checkout=%s&group_adults=%d&no_rooms=%d&group_children=%d&nflt=%s",
+		destination, checkin, checkout, adults, rooms, children, "fc%3D2%3Bht_id%3D204", // HOTEL AND FREE CANCELATION
+	)
+
+	// var errOnCloseModal error
+	var accommodations []*cdp.Node
+
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(indexUrl),
+		// chromedp.Sleep(3*time.Second),
+		// chromedp.WaitVisible(DIALOG_CLOSE_PATH),
+		// chromedp.Click(DIALOG_CLOSE_PATH),
+		chromedp.Sleep(3*time.Second),
+		chromedp.WaitVisible(CURRENCY_MODAL_OPEN_BTN_PATH),
+		chromedp.Click(CURRENCY_MODAL_OPEN_BTN_PATH),
+		chromedp.Sleep(3*time.Second),
+		chromedp.WaitVisible(USD_CURRENCY_BTN_PATH),
+		chromedp.Click(USD_CURRENCY_BTN_PATH),
+		chromedp.Sleep(5*time.Second),
+		chromedp.WaitVisible(LANGUAGE_MODAL_OPEN_BTN_PATH),
+		chromedp.Click(LANGUAGE_MODAL_OPEN_BTN_PATH),
+		chromedp.Sleep(3*time.Second),
+		chromedp.WaitVisible(ENG_BTN_PATH),
+		chromedp.Click(ENG_BTN_PATH),
+		chromedp.Sleep(3*time.Second),
+		chromedp.WaitVisible("body", chromedp.ByQuery),
+	); err != nil {
+		return nil, err
+	}
+
+	// prevLen := 0
+
+	log.Println("=====================================")
+	log.Println("SCROLLING START")
+	log.Println("=====================================")
+
+	// scroll to the end
+	for {
+		err := chromedp.Run(ctx,
+			chromedp.Sleep(5*time.Second),
+			chromedp.Nodes(`a[data-testid="availability-cta-btn"]`, &accommodations, chromedp.ByQueryAll),
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if len(accommodations) > 0 {
+			break
+		}
+
+		// if prevLen == len(accommodations) {
+		// 	break
+		// }
+
+		// prevLen = len(accommodations)
+
+		// lastId := []cdp.NodeID{accommodations[len(accommodations)-1].NodeID}
+
+		// if err2 := chromedp.Run(ctx,
+		// 	chromedp.ScrollIntoView(lastId, chromedp.ByNodeID),
+		// ); err2 != nil {
+		// 	return nil, err2
+		// }
+	}
+
+	// log.Println("=====================================")
+	// log.Println("SCROLLING END")
+	// log.Println("=====================================")
+
+	// log.Println("=====================================")
+	// log.Println("LOADING BUTTON START")
+	// log.Println("=====================================")
+
+	// for {
+	// 	if err := clickMoreAccomodationsBtn(ctx); err != nil {
+	// 		return nil, err
+	// 	}
+
+	// 	err := chromedp.Run(ctx,
+	// 		chromedp.Sleep(5*time.Second),
+	// 		chromedp.Nodes(`div[aria-label="Property"] a`, &accommodations, chromedp.ByQueryAll),
+	// 	)
+
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+
+	// 	if prevLen+PAGE_LOAD > len(accommodations) {
+	// 		break
+	// 	}
+
+	// 	prevLen = len(accommodations)
+	// }
+
+	log.Println("=====================================")
+	log.Println("LOADING BUTTON END")
+	log.Println("=====================================")
+
+	var accomodationLinks []string
+
+	for _, accomodation := range accommodations {
+		accomodationLinks = append(accomodationLinks, accomodation.AttributeValue("href"))
+	}
+
+	return accomodationLinks, nil
+}
+
+func getInformation(ctx context.Context, accommodationLink string, adults int, children int) error {
+	var name string
+	var address string
+	var tags []string
+	var description string
+
+	var roomType string
+	var roomName string
+	var roomSize string
+	var roomTags []string
+	var price float64
+
+	var canCancelFree bool
+	var isIncludeBreakfast bool
+
+	var allScore float64
+	var allReviewes int64
+
+	var categoryReviews []data.CategoryReview
+
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(accommodationLink),
+		chromedp.Sleep(5*time.Second),
+		chromedp.WaitVisible(LANGUAGE_MODAL_OPEN_BTN_PATH),
+		chromedp.Click(LANGUAGE_MODAL_OPEN_BTN_PATH),
+		chromedp.Sleep(1*time.Second),
+		chromedp.WaitVisible(ENG_BTN_PATH),
+		chromedp.Click(ENG_BTN_PATH),
+		chromedp.Sleep(5*time.Second),
+		chromedp.WaitVisible("body", chromedp.ByQuery),
+		// add name
+		chromedp.Text("h2", &name, chromedp.ByQuery),
+		// add address
+		chromedp.Text("span.hp_address_subtitle", &address, chromedp.ByQuery),
+		// add tags
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			var tagNodes []*cdp.Node
+			if err := chromedp.Nodes(TAG_PATH, &tagNodes, chromedp.ByQueryAll).Do(ctx); err != nil {
+				return err
+			}
+
+			var tag string
+			for _, tagNode := range tagNodes {
+				var tmp = []cdp.NodeID{tagNode.NodeID}
+				if err := chromedp.Text(tmp, &tag, chromedp.ByNodeID).Do(ctx); err != nil {
+					return err
+				}
+
+				tags = append(tags, tag)
+			}
+
+			return nil
+		}),
+		// add description
+		chromedp.Text(DESCRIPTION_PATH, &description, chromedp.ByQuery),
+		// export reviews
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			var scoreStr string
+
+			chromedp.Text(ALL_REVIEW_SCORE_PATH, &scoreStr, chromedp.ByQuery).Do(ctx)
+
+			var scoreParsed = strings.Split(scoreStr, " ")[1]
+
+			reviewScore, _ := strconv.ParseFloat(scoreParsed, 64)
+
+			allScore = reviewScore
+
+			var reviewCountStr string
+
+			chromedp.Text(ALL_REVIEW_COUNT_PATH, &reviewCountStr, chromedp.ByQuery).Do(ctx)
+
+			reviewCountStrReplaced := strings.Replace(strings.Split(reviewCountStr, " ")[0], ",", "", 1)
+
+			reviewCount, _ := strconv.ParseInt(reviewCountStrReplaced, 0, 32)
+
+			allReviewes = reviewCount
+
+			var subScoreNodes []*cdp.Node
+
+			chromedp.Nodes(REVIEW_SUBSCORE_PATH, &subScoreNodes, chromedp.ByQueryAll).Do(ctx)
+
+			for _, subScoreNode := range subScoreNodes {
+				var subCategoryName string
+				var subCategoryScoreTmp string
+
+				chromedp.Text(SUB_CATEGORY_NAME_PATH, &subCategoryName, chromedp.ByQuery, chromedp.FromNode(subScoreNode)).Do(ctx)
+				chromedp.Text(SUB_CATEGORY_SCORE_PATH, &subCategoryScoreTmp, chromedp.ByQuery, chromedp.FromNode(subScoreNode)).Do(ctx)
+
+				subCategoryScore, _ := strconv.ParseFloat(subCategoryScoreTmp, 64)
+
+				categoryReviews = append(categoryReviews, data.CategoryReview{Name: subCategoryName, Score: subCategoryScore})
+			}
+
+			return nil
+		}),
+		// export room details
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			var availabilityNodes []*cdp.Node
+
+			if err := chromedp.Nodes(AVAIALABILITY_PATH, &availabilityNodes, chromedp.ByQueryAll).Do(ctx); err != nil {
+				return err
+			}
+
+			for _, availabilityNode := range availabilityNodes {
+				var td []*cdp.Node
+
+				chromedp.Nodes(ROOMTYPE_CELL_PATH, &td, chromedp.ByQuery, chromedp.FromNode(availabilityNode), chromedp.AtLeast(0)).Do(ctx)
+
+				if len(td) > 0 {
+					// roomType
+					chromedp.Text(ROOM_TYPE_PATH, &roomType, chromedp.ByQuery, chromedp.FromNode(td[0])).Do(ctx)
+
+					// clear
+					roomTags = nil
+
+					chromedp.Click(ROOM_MODAL_OPEN_PATH, chromedp.ByQuery, chromedp.FromNode(availabilityNode)).Do(ctx)
+					chromedp.Sleep(3 * time.Second).Do(ctx)
+					chromedp.WaitVisible(ROOM_DETAIL_DIALOG_PATH).Do(ctx)
+
+					var dialogNodes []*cdp.Node
+					chromedp.Nodes(ROOM_DETAIL_DIALOG_PATH, &dialogNodes, chromedp.ByQuery, chromedp.AtLeast(0)).Do(ctx)
+
+					if len(dialogNodes) > 0 {
+						chromedp.Text(ROOM_NAME_PATH, &roomName, chromedp.ByQuery, chromedp.FromNode(dialogNodes[0])).Do(ctx)
+
+						var containerNodes []*cdp.Node
+						chromedp.Nodes(ROOM_DETAIL_CONTAINER, &containerNodes, chromedp.ByQueryAll, chromedp.FromNode(dialogNodes[0]), chromedp.AtLeast(0)).Do(ctx)
+
+						if len(containerNodes) > 0 {
+							chromedp.Text(ROOM_SIZE_PATH, &roomSize, chromedp.BySearch).Do(ctx)
+
+							var roomTagNodes []*cdp.Node
+							chromedp.Nodes(ROOM_TAGS_PATH, &roomTagNodes, chromedp.ByQueryAll, chromedp.FromNode(containerNodes[0])).Do(ctx)
+
+							for _, roomTagNode := range roomTagNodes {
+								roomTags = append(roomTags, "")
+								chromedp.Text([]cdp.NodeID{roomTagNode.NodeID}, &roomTags[len(roomTags)-1], chromedp.ByNodeID).Do(ctx)
+							}
+						} else {
+							chromedp.Nodes(ROOM_DETAIL_CONTAINER_IF_NO_PICTURE, &containerNodes, chromedp.ByQueryAll, chromedp.FromNode(dialogNodes[0]), chromedp.AtLeast(0)).Do(ctx)
+
+							chromedp.Text(ROOM_SIZE_PATH_IF_NO_PICTURE, &roomSize, chromedp.BySearch).Do(ctx)
+
+							if len(containerNodes) > 0 {
+								var roomTagNodes []*cdp.Node
+								chromedp.Nodes(ROOM_TAGS_PATH, &roomTagNodes, chromedp.ByQueryAll, chromedp.FromNode(containerNodes[0])).Do(ctx)
+
+								for _, roomTagNode := range roomTagNodes {
+									roomTags = append(roomTags, "")
+									chromedp.Text([]cdp.NodeID{roomTagNode.NodeID}, &roomTags[len(roomTags)-1], chromedp.ByNodeID).Do(ctx)
+								}
+							}
+						}
+					}
+					chromedp.Click(ROOM_MODAL_CLOSE_BTN_PATH, chromedp.ByQuery).Do(ctx)
+					chromedp.Sleep(3 * time.Second).Do(ctx)
+				}
+
+				// occupancy
+				var adultAndChildren string
+
+				var adultsCount int = 0
+				var childrenCount int = 0
+
+				chromedp.Text(OCCUPANCY_PATH, &adultAndChildren, chromedp.ByQuery, chromedp.FromNode(availabilityNode)).Do(ctx)
+
+				occupancies := strings.Split(strings.Trim(adultAndChildren, " "), "<br>")
+
+				if len(occupancies) > 0 {
+					adultsCountParsed, _ := strconv.ParseInt(strings.Split(occupancies[0], " ")[2], 0, 32)
+
+					adultsCount = int(adultsCountParsed)
+				}
+
+				if len(occupancies) == 2 {
+					childrenCountParsed, _ := strconv.ParseInt(strings.Split(occupancies[1], " ")[2], 0, 32)
+
+					childrenCount = int(childrenCountParsed)
+				}
+
+				if adultsCount != adults || childrenCount != children {
+					continue
+				}
+
+				roomPrice, _ := strconv.ParseFloat(availabilityNode.AttributeValue("data-hotel-rounded-price"), 64)
+
+				var roomChrageNodes []*cdp.Node
+
+				chromedp.Nodes(FEE_PATH, &roomChrageNodes, chromedp.ByQueryAll, chromedp.FromNode(availabilityNode)).Do(ctx)
+
+				roomCharge, _ := strconv.ParseFloat(roomChrageNodes[0].AttributeValue("data-excl-charges-raw"), 64)
+
+				price = roomPrice + roomCharge
+
+				// open free cancellation and Meals
+				chromedp.Click(POLICY_MODAL_PATH, chromedp.ByQuery, chromedp.FromNode(availabilityNode)).Do(ctx)
+				chromedp.Sleep(3 * time.Second).Do(ctx)
+
+				var dialogNodes []*cdp.Node
+				chromedp.Nodes(DIALOG_PATH, &dialogNodes, chromedp.ByQuery).Do(ctx)
+
+				if len(dialogNodes) > 0 {
+					var mealPlan string
+					var cancelation string
+
+					chromedp.Text(MEAL_DESCRPTION_PATH, &mealPlan).Do(ctx)
+					chromedp.Text(CANCELATION_SUMMARY_PATH, &cancelation).Do(ctx)
+
+					isIncludeBreakfast = !(strings.Contains(mealPlan, "No meal is included") || strings.Contains(mealPlan, "breakfast costs"))
+					canCancelFree = strings.Contains(cancelation, "Free cancellation")
+
+					var cancellationNodes []*cdp.Node
+					chromedp.Nodes(FREE_CANCELATION_STRONG_PATH, &cancellationNodes, chromedp.BySearch, chromedp.FromNode(dialogNodes[0])).Do(ctx)
+
+					canCancelFree = len(cancellationNodes) > 0
+
+					chromedp.Click(POLICY_MODAL_CLOSE_BTN_PATH, chromedp.ByQuery).Do(ctx)
+					chromedp.Sleep(3 * time.Second).Do(ctx)
+				}
+			}
+			println("=============================================================")
+			println(fmt.Sprintf("room price: %v", price))
+			println(canCancelFree)
+			println(isIncludeBreakfast)
+			for _, roomTag := range roomTags {
+				println(roomTag)
+			}
+			println(roomSize)
+			println(roomType)
+			println("=============================================================")
+
+			return nil
+		}),
+	); err != nil {
+		return err
+	}
+
+	println("=============================================================")
+
+	println(fmt.Sprintf("all review score: %v", allScore))
+	println(fmt.Sprintf("all review count: %v", allReviewes))
+
+	for _, categoryReview := range categoryReviews {
+		println(fmt.Sprintf("sub category name: %v", categoryReview.Name))
+		println(fmt.Sprintf("sub category score: %v", categoryReview.Score))
+	}
+
+	println("=============================================================")
+
+	println("=============================================================")
+	println("END")
+	println("=============================================================")
+
+	return nil
+}
+
+func main() {
+	allocCtx, cancel := chromedp.NewExecAllocator(context.Background())
+	defer cancel()
+
+	ctx, cancel := chromedp.NewContext(allocCtx, chromedp.WithDebugf(log.Printf))
+	defer cancel()
+
+	adults := 2
+	children := 0
+
+	accomodationLinks, err := searchAccomodationLinks(
+		ctx,
+		"Newyork",
+		"2024-10-10", "2024-10-11",
+		adults, children, 1,
+	)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, link := range accomodationLinks {
+		getInformation(ctx, link, adults, children)
+	}
+}
