@@ -3,8 +3,10 @@ package main
 import (
 	"booking/data"
 	"context"
+	"encoding/csv"
 	"fmt"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -57,6 +59,7 @@ const REVIEW_SUBSCORE_PATH = `div[data-testid="PropertyReviewsRegionBlock"] > di
 const SUB_CATEGORY_NAME_PATH = `div > div:nth-of-type(1) > div:nth-of-type(1) > div > span`
 const SUB_CATEGORY_SCORE_PATH = `div > div:nth-of-type(1) > div:nth-of-type(2) > div`
 const ROOM_DETAIL_DIALOG_PATH = `div[aria-label="dialog"]`
+const HOTEL_ADDRESS_LINK_PATH = `a#hotel_address`
 
 func searchAccomodationLinks(ctx context.Context, destination string, checkin string, checkout string, adults int, children int, rooms int) ([]string, error) {
 	indexUrl := fmt.Sprintf("https://www.booking.com/searchresults.en-gb.html?ss=%s&checkin=%s&checkout=%s&group_adults=%d&no_rooms=%d&group_children=%d&nflt=%s",
@@ -167,15 +170,91 @@ func searchAccomodationLinks(ctx context.Context, destination string, checkin st
 	return accomodationLinks, nil
 }
 
-func getInformation(ctx context.Context, accommodationLink string, adults int, children int) error {
+func makeHeader(hotel_summary *csv.Writer, room_summary *csv.Writer) error {
+	var err error = nil
+
+	err = hotel_summary.Write(
+		[]string{
+			"hotel_name",
+			"latitude",
+			"longitude",
+			"tags",
+			"score",
+			"review_count",
+			"review_category_score",
+		},
+	)
+
+	err = room_summary.Write(
+		[]string{
+			"hotel_name",
+			"room_name",
+			"room_type",
+			"room_tags",
+			"price",
+			"free_cancelation",
+			"include_breakfast",
+		},
+	)
+
+	hotel_summary.Flush()
+	room_summary.Flush()
+
+	return err
+}
+
+func makeCategoryReviewsToOneColumn(categoryReviews []data.CategoryReview) string {
+	var reviewsToString []string
+
+	for _, categoryReview := range categoryReviews {
+		reviewsToString = append(reviewsToString, fmt.Sprintf("%s:%f", categoryReview.Name, categoryReview.Score))
+	}
+
+	return strings.Join(reviewsToString, ",")
+}
+
+func makeHotelRow(hotel_summary *csv.Writer, name string, latitude string, longitude string, tags []string, score float64, review_count int64, categoryReviews []data.CategoryReview) {
+	hotel_summary.Write(
+		[]string{
+			name,
+			latitude,
+			longitude,
+			strings.Join(tags, ","),
+			strconv.FormatFloat(score, 'f', -1, 64),
+			strconv.FormatInt(review_count, 10),
+			makeCategoryReviewsToOneColumn(categoryReviews),
+		},
+	)
+	hotel_summary.Flush()
+}
+
+func makeRoomRow(room_summary *csv.Writer, name string, roomName string, roomType string, roomTags []string, price float64, canCancelFree bool, isIncludedBreakfast bool) {
+	room_summary.Write(
+		[]string{
+			name,
+			roomName,
+			roomType,
+			strings.Join(roomTags, ","),
+			strconv.FormatFloat(price, 'f', -1, 64),
+			strconv.FormatBool(canCancelFree),
+			strconv.FormatBool(isIncludedBreakfast),
+		},
+	)
+	room_summary.Flush()
+}
+
+func getInformation(ctx context.Context, accommodationLink string, adults int, children int, hotel_summary *csv.Writer, room_summary *csv.Writer) error {
 	var name string
-	var address string
+
+	var latitude string
+	var longitude string
+
 	var tags []string
 	var description string
 
 	var roomType string
 	var roomName string
-	var roomSize string
+	// var roomSize string
 	var roomTags []string
 	var price float64
 
@@ -200,7 +279,22 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 		// add name
 		chromedp.Text("h2", &name, chromedp.ByQuery),
 		// add address
-		chromedp.Text("span.hp_address_subtitle", &address, chromedp.ByQuery),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			var addressNodes []*cdp.Node
+
+			if err := chromedp.Nodes(HOTEL_ADDRESS_LINK_PATH, &addressNodes, chromedp.ByQueryAll).Do(ctx); err != nil {
+				return err
+			}
+
+			var tmp string = addressNodes[0].AttributeValue("data-atlas-latlng")
+
+			var latlng = strings.Split(tmp, ",")
+
+			latitude = latlng[0]
+			longitude = latlng[1]
+
+			return nil
+		}),
 		// add tags
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var tagNodes []*cdp.Node
@@ -262,6 +356,15 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 
 			return nil
 		}),
+		// create Room summary
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			makeHotelRow(
+				hotel_summary,
+				name, latitude, longitude, tags, allScore, allReviewes, categoryReviews,
+			)
+
+			return nil
+		}),
 		// export room details
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var availabilityNodes []*cdp.Node
@@ -296,7 +399,7 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 						chromedp.Nodes(ROOM_DETAIL_CONTAINER, &containerNodes, chromedp.ByQueryAll, chromedp.FromNode(dialogNodes[0]), chromedp.AtLeast(0)).Do(ctx)
 
 						if len(containerNodes) > 0 {
-							chromedp.Text(ROOM_SIZE_PATH, &roomSize, chromedp.BySearch).Do(ctx)
+							// chromedp.Text(ROOM_SIZE_PATH, &roomSize, chromedp.BySearch).Do(ctx)
 
 							var roomTagNodes []*cdp.Node
 							chromedp.Nodes(ROOM_TAGS_PATH, &roomTagNodes, chromedp.ByQueryAll, chromedp.FromNode(containerNodes[0])).Do(ctx)
@@ -306,9 +409,9 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 								chromedp.Text([]cdp.NodeID{roomTagNode.NodeID}, &roomTags[len(roomTags)-1], chromedp.ByNodeID).Do(ctx)
 							}
 						} else {
-							chromedp.Nodes(ROOM_DETAIL_CONTAINER_IF_NO_PICTURE, &containerNodes, chromedp.ByQueryAll, chromedp.FromNode(dialogNodes[0]), chromedp.AtLeast(0)).Do(ctx)
+							// chromedp.Nodes(ROOM_DETAIL_CONTAINER_IF_NO_PICTURE, &containerNodes, chromedp.ByQueryAll, chromedp.FromNode(dialogNodes[0]), chromedp.AtLeast(0)).Do(ctx)
 
-							chromedp.Text(ROOM_SIZE_PATH_IF_NO_PICTURE, &roomSize, chromedp.BySearch).Do(ctx)
+							// chromedp.Text(ROOM_SIZE_PATH_IF_NO_PICTURE, &roomSize, chromedp.BySearch).Do(ctx)
 
 							if len(containerNodes) > 0 {
 								var roomTagNodes []*cdp.Node
@@ -386,39 +489,17 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 					chromedp.Click(POLICY_MODAL_CLOSE_BTN_PATH, chromedp.ByQuery).Do(ctx)
 					chromedp.Sleep(3 * time.Second).Do(ctx)
 				}
-			}
-			println("=============================================================")
-			println(fmt.Sprintf("room price: %v", price))
-			println(canCancelFree)
-			println(isIncludeBreakfast)
-			for _, roomTag := range roomTags {
-				println(roomTag)
-			}
-			println(roomSize)
-			println(roomType)
-			println("=============================================================")
 
+				makeRoomRow(
+					room_summary,
+					name, roomName, roomType, roomTags, price, canCancelFree, isIncludeBreakfast,
+				)
+			}
 			return nil
 		}),
 	); err != nil {
-		return err
+		log.Fatal(err)
 	}
-
-	println("=============================================================")
-
-	println(fmt.Sprintf("all review score: %v", allScore))
-	println(fmt.Sprintf("all review count: %v", allReviewes))
-
-	for _, categoryReview := range categoryReviews {
-		println(fmt.Sprintf("sub category name: %v", categoryReview.Name))
-		println(fmt.Sprintf("sub category score: %v", categoryReview.Score))
-	}
-
-	println("=============================================================")
-
-	println("=============================================================")
-	println("END")
-	println("=============================================================")
 
 	return nil
 }
@@ -432,19 +513,44 @@ func main() {
 
 	adults := 2
 	children := 0
+	rooms := 1
+
+	city := "NewYork"
+
+	from := "2024-10-10"
+	to := "2024-10-11"
 
 	accomodationLinks, err := searchAccomodationLinks(
 		ctx,
-		"Newyork",
-		"2024-10-10", "2024-10-11",
-		adults, children, 1,
+		city,
+		from, to,
+		adults, children, rooms,
 	)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	t := time.Now()
+
+	hotel_summary_f, err := os.Create(fmt.Sprintf("%s_%s_%s__%s_hotel_list", city, from, to, t.Format("20060102150405")))
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	room_summary_f, err := os.Create(fmt.Sprintf("%s_%s_%s__%s_room_list", city, from, to, t.Format("20060102150405")))
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	hotel_summary := csv.NewWriter(hotel_summary_f)
+	room_summary := csv.NewWriter(room_summary_f)
+
+	makeHeader(hotel_summary, room_summary)
+
 	for _, link := range accomodationLinks {
-		getInformation(ctx, link, adults, children)
+		getInformation(ctx, link, adults, children, hotel_summary, room_summary)
 	}
 }
