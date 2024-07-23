@@ -533,13 +533,13 @@ func main() {
 
 	t := time.Now()
 
-	hotel_summary_f, err := os.Create(fmt.Sprintf("%s_%s_%s__%s_hotel_list", city, from, to, t.Format("20060102150405")))
+	hotel_summary_f, err := os.Create(fmt.Sprintf("%s_%s_%s__%s_hotel_list.csv", city, from, to, t.Format("20060102150405")))
 
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	room_summary_f, err := os.Create(fmt.Sprintf("%s_%s_%s__%s_room_list", city, from, to, t.Format("20060102150405")))
+	room_summary_f, err := os.Create(fmt.Sprintf("%s_%s_%s__%s_room_list.csv", city, from, to, t.Format("20060102150405")))
 
 	if err != nil {
 		fmt.Println(err)
