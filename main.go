@@ -71,9 +71,19 @@ func searchAccomodationLinks(ctx context.Context, destination string, checkin st
 
 	if err := chromedp.Run(ctx,
 		chromedp.Navigate(indexUrl),
-		// chromedp.Sleep(3*time.Second),
-		// chromedp.WaitVisible(DIALOG_CLOSE_PATH),
-		// chromedp.Click(DIALOG_CLOSE_PATH),
+		chromedp.Sleep(5*time.Second),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			var closeButtonNodes []*cdp.Node
+			if err := chromedp.Nodes(DIALOG_CLOSE_PATH, &closeButtonNodes, chromedp.ByQuery, chromedp.AtLeast(0)).Do(ctx); err != nil {
+				return err
+			}
+
+			if len(closeButtonNodes) > 0 {
+				chromedp.Click(closeButtonNodes[0].NodeID, chromedp.ByNodeID)
+			}
+
+			return nil
+		}),
 		chromedp.Sleep(3*time.Second),
 		chromedp.WaitVisible(CURRENCY_MODAL_OPEN_BTN_PATH),
 		chromedp.Click(CURRENCY_MODAL_OPEN_BTN_PATH),
