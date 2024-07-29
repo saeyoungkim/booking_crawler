@@ -79,7 +79,7 @@ func searchAccomodationLinks(ctx context.Context, destination string, checkin st
 			}
 
 			if len(closeButtonNodes) > 0 {
-				chromedp.Click(closeButtonNodes[0].NodeID, chromedp.ByNodeID)
+				chromedp.Click([]cdp.NodeID{closeButtonNodes[0].NodeID}, chromedp.ByNodeID)
 			}
 
 			return nil
@@ -262,7 +262,7 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 	var tags []string
 	var description string
 
-	var roomType string
+	var roomType string = ""
 	var roomName string
 	// var roomSize string
 	var roomTags []string
@@ -278,13 +278,13 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 
 	if err := chromedp.Run(ctx,
 		chromedp.Navigate(accommodationLink),
-		chromedp.Sleep(5*time.Second),
+		chromedp.Sleep(4*time.Second),
 		chromedp.WaitVisible(LANGUAGE_MODAL_OPEN_BTN_PATH),
 		chromedp.Click(LANGUAGE_MODAL_OPEN_BTN_PATH),
 		chromedp.Sleep(1*time.Second),
 		chromedp.WaitVisible(ENG_BTN_PATH),
 		chromedp.Click(ENG_BTN_PATH),
-		chromedp.Sleep(5*time.Second),
+		chromedp.Sleep(4*time.Second),
 		chromedp.WaitVisible("body", chromedp.ByQuery),
 		// add name
 		chromedp.Text("h2", &name, chromedp.ByQuery),
@@ -383,21 +383,34 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 				return err
 			}
 
+			fmt.Println("============================================================")
+			fmt.Println(len(availabilityNodes))
+			fmt.Println("============================================================")
+
 			for _, availabilityNode := range availabilityNodes {
 				var td []*cdp.Node
 
 				chromedp.Nodes(ROOMTYPE_CELL_PATH, &td, chromedp.ByQuery, chromedp.FromNode(availabilityNode), chromedp.AtLeast(0)).Do(ctx)
 
+				// var html string
+				// chromedp.InnerHTML([]cdp.NodeID{td[0].NodeID}, &html, chromedp.ByNodeID).Do(ctx)
+				// fmt.Println("===============================================")
+				// fmt.Println(html)
+				// fmt.Println("===============================================")
+
 				if len(td) > 0 {
 					// roomType
-					chromedp.Text(ROOM_TYPE_PATH, &roomType, chromedp.ByQuery, chromedp.FromNode(td[0])).Do(ctx)
+					chromedp.Text(ROOM_TYPE_PATH, &roomType, chromedp.ByQuery, chromedp.FromNode(td[0]), chromedp.AtLeast(0)).Do(ctx)
+
+					if roomType == "" {
+						continue
+					}
 
 					// clear
 					roomTags = nil
 
 					chromedp.Click(ROOM_MODAL_OPEN_PATH, chromedp.ByQuery, chromedp.FromNode(availabilityNode)).Do(ctx)
-					chromedp.Sleep(3 * time.Second).Do(ctx)
-					chromedp.WaitVisible(ROOM_DETAIL_DIALOG_PATH).Do(ctx)
+					chromedp.Sleep(5 * time.Second).Do(ctx)
 
 					var dialogNodes []*cdp.Node
 					chromedp.Nodes(ROOM_DETAIL_DIALOG_PATH, &dialogNodes, chromedp.ByQuery, chromedp.AtLeast(0)).Do(ctx)
@@ -525,7 +538,8 @@ func main() {
 	children := 0
 	rooms := 1
 
-	city := "NewYork"
+	city := "Ameritania at Times Square"
+	// city := "Newyork"
 
 	from := "2024-10-10"
 	to := "2024-10-11"
