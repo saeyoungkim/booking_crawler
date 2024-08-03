@@ -48,11 +48,12 @@ const ROOM_TAGS_PATH = `div.hprt-facilities-facility`
 const FEE_PATH = `div.prd-taxes-and-fees-under-price`
 const CANCELATION_PATH = `ul li.e2e-cancellation`
 const ROOM_MODAL_CLOSE_BTN_PATH = "button.modal-mask-closeBtn"
-const POLICY_MODAL_PATH = `button[data-testid="policy-modal-trigger"]`
+const POLICY_MODAL_OPEN_PATH = `button[data-testid="policy-modal-trigger"]`
 const MEAL_DESCRPTION_PATH = `div.bui-group > div:nth-of-type(1) > div.bui-group > div.bui-group__item:nth-of-type(1) > div`
 const CANCELATION_SUMMARY_PATH = `div.bui-group > div:nth-of-type(2) > div.bui-group > div.bui-group__item:nth-of-type(1) > div.bui-group:nth-of-type(1) > div.bui-group__item:nth-of-type(2) > div.bui-group:nth-of-type(1) > div.bui-group__item:nth-of-type(1) > span > strong`
 const FREE_CANCELATION_STRONG_PATH = "//strong[contains(text(),'Free cancellation')]"
 const POLICY_MODAL_CLOSE_BTN_PATH = `button[data-bui-ref="modal-close"]`
+const POLICY_MODAL_PATH = `div[data-bui-ref="modal-content-wrapper"]`
 const GUEST_REVIEW_PATH = `div[data-testid="PropertyReviewsRegionBlock"]`
 const ALL_REVIEW_SCORE_PATH = `div[data-testid="review-score-right-component"] > div:nth-of-type(1)`
 const ALL_REVIEW_COUNT_PATH = `div[data-testid="review-score-right-component"] > div:nth-of-type(2) > div:nth-of-type(2)`
@@ -454,8 +455,8 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 				price = roomPrice + roomCharge
 
 				// open free cancellation and Meals
-				chromedp.Click(POLICY_MODAL_PATH, chromedp.ByQuery, chromedp.FromNode(availabilityNode)).Do(ctx)
-				chromedp.Sleep(3 * time.Second).Do(ctx)
+				chromedp.Click(POLICY_MODAL_OPEN_PATH, chromedp.ByQuery, chromedp.FromNode(availabilityNode)).Do(ctx)
+				chromedp.WaitVisible(POLICY_MODAL_PATH, chromedp.ByQuery).Do(ctx)
 
 				var dialogNodes []*cdp.Node
 				chromedp.Nodes(DIALOG_PATH, &dialogNodes, chromedp.ByQuery).Do(ctx)
@@ -476,7 +477,8 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 					canCancelFree = len(cancellationNodes) > 0
 
 					chromedp.Click(POLICY_MODAL_CLOSE_BTN_PATH, chromedp.ByQuery).Do(ctx)
-					chromedp.Sleep(3 * time.Second).Do(ctx)
+					// chromedp.Sleep(3 * time.Second).Do(ctx)
+					chromedp.WaitNotPresent(POLICY_MODAL_PATH, chromedp.ByQuery).Do(ctx)
 				}
 
 				makeRoomRow(
