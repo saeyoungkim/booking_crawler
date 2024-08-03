@@ -37,6 +37,7 @@ const OCCUPANCY_PATH = "div.hprt-occupancy-occupancy-info > span.bui-u-sr-only"
 const PRICE_CELL_PATH = "td.hprt-table-cell-price"
 const CONDITIONS_CELL_PATH = "td.hprt-table-cell-conditions"
 const ROOM_MODAL_OPEN_PATH = `a.hprt-roomtype-link`
+const ROOM_MODAL_PATH = `div[role="dialog"] > div[data-component="hotel/new-rooms-table/lightbox"]`
 const ROOM_NAME_PATH = "h1#hp_rt_room_gallery_modal_room_name"
 const ROOM_DETAIL_CONTAINER = `div.hprt-lightbox-right-container`
 const ROOM_SIZE_PATH = `//div[class="hprt-lightbox-right-container"]/h2[1]/following-sibling::text()[1]`
@@ -53,16 +54,16 @@ const CANCELATION_SUMMARY_PATH = `div.bui-group > div:nth-of-type(2) > div.bui-g
 const FREE_CANCELATION_STRONG_PATH = "//strong[contains(text(),'Free cancellation')]"
 const POLICY_MODAL_CLOSE_BTN_PATH = `button[data-bui-ref="modal-close"]`
 const GUEST_REVIEW_PATH = `div[data-testid="PropertyReviewsRegionBlock"]`
-const ALL_REVIEW_SCORE_PATH = `div[data-testid="review-score-right-component"] > div:nth-of-type(1) > div`
+const ALL_REVIEW_SCORE_PATH = `div[data-testid="review-score-right-component"] > div:nth-of-type(1)`
 const ALL_REVIEW_COUNT_PATH = `div[data-testid="review-score-right-component"] > div:nth-of-type(2) > div:nth-of-type(2)`
-const REVIEW_SUBSCORE_PATH = `div[data-testid="PropertyReviewsRegionBlock"] > div:nth-of-type(3) > div > div:nth-of-type(2) > div > div[data-testid="review-subscore"]`
-const SUB_CATEGORY_NAME_PATH = `div > div:nth-of-type(1) > div:nth-of-type(1) > div > span`
-const SUB_CATEGORY_SCORE_PATH = `div > div:nth-of-type(1) > div:nth-of-type(2) > div`
+const REVIEW_SUBSCORE_PATH = `div[data-testid="PropertyReviewsRegionBlock"] div[data-testid="review-subscore"]`
+const SUB_CATEGORY_NAME_PATH = `div > div:nth-of-type(1) > div:nth-of-type(1)`
+const SUB_CATEGORY_SCORE_PATH = `div > div:nth-of-type(1) > div:nth-of-type(2)`
 const ROOM_DETAIL_DIALOG_PATH = `div[aria-label="dialog"]`
 const HOTEL_ADDRESS_LINK_PATH = `a#hotel_address`
 
 func searchAccomodationLinks(ctx context.Context, destination string, checkin string, checkout string, adults int, children int, rooms int) ([]string, error) {
-	indexUrl := fmt.Sprintf("https://www.booking.com/searchresults.en-gb.html?ss=%s&checkin=%s&checkout=%s&group_adults=%d&no_rooms=%d&group_children=%d&nflt=%s",
+	indexUrl := fmt.Sprintf("https://www.booking.com/searchresults.en-gb.html?ss=%s&checkin=%s&checkout=%s&group_adults=%d&no_rooms=%d&group_children=%d&nflt=%s&selected_currency=USD&soz=1&lang_changed=1&lang=en-us",
 		destination, checkin, checkout, adults, rooms, children, "fc%3D2%3Bht_id%3D204", // HOTEL AND FREE CANCELATION
 	)
 
@@ -79,24 +80,11 @@ func searchAccomodationLinks(ctx context.Context, destination string, checkin st
 			}
 
 			if len(closeButtonNodes) > 0 {
-				chromedp.Click([]cdp.NodeID{closeButtonNodes[0].NodeID}, chromedp.ByNodeID)
+				chromedp.Click([]cdp.NodeID{closeButtonNodes[0].NodeID}, chromedp.ByNodeID).Do(ctx)
 			}
 
 			return nil
 		}),
-		chromedp.Sleep(3*time.Second),
-		chromedp.WaitVisible(CURRENCY_MODAL_OPEN_BTN_PATH),
-		chromedp.Click(CURRENCY_MODAL_OPEN_BTN_PATH),
-		chromedp.Sleep(3*time.Second),
-		chromedp.WaitVisible(USD_CURRENCY_BTN_PATH),
-		chromedp.Click(USD_CURRENCY_BTN_PATH),
-		chromedp.Sleep(5*time.Second),
-		chromedp.WaitVisible(LANGUAGE_MODAL_OPEN_BTN_PATH),
-		chromedp.Click(LANGUAGE_MODAL_OPEN_BTN_PATH),
-		chromedp.Sleep(3*time.Second),
-		chromedp.WaitVisible(ENG_BTN_PATH),
-		chromedp.Click(ENG_BTN_PATH),
-		chromedp.Sleep(3*time.Second),
 		chromedp.WaitVisible("body", chromedp.ByQuery),
 	); err != nil {
 		return nil, err
@@ -180,10 +168,8 @@ func searchAccomodationLinks(ctx context.Context, destination string, checkin st
 	return accomodationLinks, nil
 }
 
-func makeHeader(hotel_summary *csv.Writer, room_summary *csv.Writer) error {
-	var err error = nil
-
-	err = hotel_summary.Write(
+func makeHeader(hotel_summary *csv.Writer, room_summary *csv.Writer) {
+	hotel_summary.Write(
 		[]string{
 			"hotel_name",
 			"latitude",
@@ -195,7 +181,7 @@ func makeHeader(hotel_summary *csv.Writer, room_summary *csv.Writer) error {
 		},
 	)
 
-	err = room_summary.Write(
+	room_summary.Write(
 		[]string{
 			"hotel_name",
 			"room_name",
@@ -209,8 +195,6 @@ func makeHeader(hotel_summary *csv.Writer, room_summary *csv.Writer) error {
 
 	hotel_summary.Flush()
 	room_summary.Flush()
-
-	return err
 }
 
 func makeCategoryReviewsToOneColumn(categoryReviews []data.CategoryReview) string {
@@ -278,14 +262,6 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 
 	if err := chromedp.Run(ctx,
 		chromedp.Navigate(accommodationLink),
-		chromedp.Sleep(4*time.Second),
-		chromedp.WaitVisible(LANGUAGE_MODAL_OPEN_BTN_PATH),
-		chromedp.Click(LANGUAGE_MODAL_OPEN_BTN_PATH),
-		chromedp.Sleep(1*time.Second),
-		chromedp.WaitVisible(ENG_BTN_PATH),
-		chromedp.Click(ENG_BTN_PATH),
-		chromedp.Sleep(4*time.Second),
-		chromedp.WaitVisible("body", chromedp.ByQuery),
 		// add name
 		chromedp.Text("h2", &name, chromedp.ByQuery),
 		// add address
@@ -332,7 +308,7 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 
 			chromedp.Text(ALL_REVIEW_SCORE_PATH, &scoreStr, chromedp.ByQuery).Do(ctx)
 
-			var scoreParsed = strings.Split(scoreStr, " ")[1]
+			var scoreParsed = strings.Split(strings.ReplaceAll(scoreStr, "\r\n", "\n"), "\n")[1]
 
 			reviewScore, _ := strconv.ParseFloat(scoreParsed, 64)
 
@@ -383,20 +359,10 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 				return err
 			}
 
-			fmt.Println("============================================================")
-			fmt.Println(len(availabilityNodes))
-			fmt.Println("============================================================")
-
 			for _, availabilityNode := range availabilityNodes {
 				var td []*cdp.Node
 
 				chromedp.Nodes(ROOMTYPE_CELL_PATH, &td, chromedp.ByQuery, chromedp.FromNode(availabilityNode), chromedp.AtLeast(0)).Do(ctx)
-
-				// var html string
-				// chromedp.InnerHTML([]cdp.NodeID{td[0].NodeID}, &html, chromedp.ByNodeID).Do(ctx)
-				// fmt.Println("===============================================")
-				// fmt.Println(html)
-				// fmt.Println("===============================================")
 
 				if len(td) > 0 {
 					// roomType
@@ -410,7 +376,7 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 					roomTags = nil
 
 					chromedp.Click(ROOM_MODAL_OPEN_PATH, chromedp.ByQuery, chromedp.FromNode(availabilityNode)).Do(ctx)
-					chromedp.Sleep(5 * time.Second).Do(ctx)
+					chromedp.WaitVisible(ROOM_MODAL_PATH, chromedp.ByQuery).Do(ctx)
 
 					var dialogNodes []*cdp.Node
 					chromedp.Nodes(ROOM_DETAIL_DIALOG_PATH, &dialogNodes, chromedp.ByQuery, chromedp.AtLeast(0)).Do(ctx)
@@ -528,7 +494,13 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 }
 
 func main() {
-	allocCtx, cancel := chromedp.NewExecAllocator(context.Background())
+	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.Flag("headless", false), // headless=false に変更
+		chromedp.Flag("disable-features", "Translate"),
+		chromedp.Flag("disable-notifications", true),
+	)
+
+	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
 	defer cancel()
 
 	ctx, cancel := chromedp.NewContext(allocCtx, chromedp.WithDebugf(log.Printf))
@@ -538,8 +510,8 @@ func main() {
 	children := 0
 	rooms := 1
 
-	city := "Ameritania at Times Square"
-	// city := "Newyork"
+	// city := "Hilton Garden Inn New York/Midtown Park Avenue"
+	city := "The Fifth Avenue Hotel"
 
 	from := "2024-10-10"
 	to := "2024-10-11"
@@ -575,6 +547,7 @@ func main() {
 	makeHeader(hotel_summary, room_summary)
 
 	for _, link := range accomodationLinks {
-		getInformation(ctx, link, adults, children, hotel_summary, room_summary)
+		linkWithEnglish := link + "&soz=1&lang_changed=1&lang=en-us&selected_currency=USD"
+		getInformation(ctx, linkWithEnglish, adults, children, hotel_summary, room_summary)
 	}
 }
