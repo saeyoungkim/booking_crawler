@@ -19,11 +19,7 @@ const PAGE_LOAD = 25
 const DIALOG_PATH = `div[role="dialog"]`
 const DIALOG_CLOSE_PATH = `div[role="dialog"] > div > div > div > div > button`
 const LOAD_BUTTON_XPATH = "//span[text()='Load more results']"
-const CURRENCY_MODAL_OPEN_BTN_PATH = `button[data-testid="header-currency-picker-trigger"]`
-const MODAL_PATH = `div[data-testid="selection-modal"]`
-const USD_CURRENCY_BTN_PATH = "//div[text()='USD']"
-const LANGUAGE_MODAL_OPEN_BTN_PATH = `button[data-testid="header-language-picker-trigger"]`
-const ENG_BTN_PATH = "//span[text()='English (US)']"
+const HOTEL_NAME_PATH = "div#hp_hotel_name h2"
 const END_LAYOUT_PATH = "div.bottom_of_basiclayout"
 const FOOTER_PATH = "#footer_menu_track"
 const TAG_PATH = `span[data-testid="facility-icon"] ~ div > span > div > span`
@@ -58,8 +54,7 @@ const GUEST_REVIEW_PATH = `div[data-testid="PropertyReviewsRegionBlock"]`
 const ALL_REVIEW_SCORE_PATH = `div[data-testid="review-score-right-component"] > div:nth-of-type(1)`
 const ALL_REVIEW_COUNT_PATH = `div[data-testid="review-score-right-component"] > div:nth-of-type(2) > div:nth-of-type(2)`
 const REVIEW_SUBSCORE_PATH = `div[data-testid="PropertyReviewsRegionBlock"] div[data-testid="review-subscore"]`
-const SUB_CATEGORY_NAME_PATH = `div > div:nth-of-type(1) > div:nth-of-type(1)`
-const SUB_CATEGORY_SCORE_PATH = `div > div:nth-of-type(1) > div:nth-of-type(2)`
+const SUB_CATEGORY_NAME_AND_SCORE_PATH = `div > div:nth-of-type(1) > div:nth-of-type(1)`
 const ROOM_DETAIL_DIALOG_PATH = `div[aria-label="dialog"]`
 const HOTEL_ADDRESS_LINK_PATH = `a#hotel_address`
 
@@ -264,7 +259,7 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 	if err := chromedp.Run(ctx,
 		chromedp.Navigate(accommodationLink),
 		// add name
-		chromedp.Text("h2", &name, chromedp.ByQuery),
+		chromedp.Text(HOTEL_NAME_PATH, &name, chromedp.ByQuery),
 		// add address
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var addressNodes []*cdp.Node
@@ -330,13 +325,14 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 			chromedp.Nodes(REVIEW_SUBSCORE_PATH, &subScoreNodes, chromedp.ByQueryAll).Do(ctx)
 
 			for _, subScoreNode := range subScoreNodes {
-				var subCategoryName string
 				var subCategoryScoreTmp string
 
-				chromedp.Text(SUB_CATEGORY_NAME_PATH, &subCategoryName, chromedp.ByQuery, chromedp.FromNode(subScoreNode)).Do(ctx)
-				chromedp.Text(SUB_CATEGORY_SCORE_PATH, &subCategoryScoreTmp, chromedp.ByQuery, chromedp.FromNode(subScoreNode)).Do(ctx)
+				chromedp.Text(SUB_CATEGORY_NAME_AND_SCORE_PATH, &subCategoryScoreTmp, chromedp.ByQuery, chromedp.FromNode(subScoreNode)).Do(ctx)
 
-				subCategoryScore, _ := strconv.ParseFloat(subCategoryScoreTmp, 64)
+				var subCategory = strings.Split(strings.ReplaceAll(subCategoryScoreTmp, "\r\n", "\n"), "\n")
+
+				subCategoryName := subCategory[0]
+				subCategoryScore, _ := strconv.ParseFloat(subCategory[1], 64)
 
 				categoryReviews = append(categoryReviews, data.CategoryReview{Name: subCategoryName, Score: subCategoryScore})
 			}
@@ -512,8 +508,8 @@ func main() {
 	children := 0
 	rooms := 1
 
-	// city := "Hilton Garden Inn New York/Midtown Park Avenue"
-	city := "The Fifth Avenue Hotel"
+	city := "Sheraton Lincoln Harbor Hotel"
+	// city := "Newyork"
 
 	from := "2024-10-10"
 	to := "2024-10-11"
