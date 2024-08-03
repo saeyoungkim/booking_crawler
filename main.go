@@ -508,8 +508,7 @@ func main() {
 	children := 0
 	rooms := 1
 
-	city := "Sheraton Lincoln Harbor Hotel"
-	// city := "Newyork"
+	city := "Newyork"
 
 	from := "2024-10-10"
 	to := "2024-10-11"
