@@ -258,7 +258,7 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 
 	if err := chromedp.Run(ctx,
 		chromedp.Navigate(accommodationLink),
-		chromedp.Sleep(5*time.Second),
+		chromedp.Sleep(8*time.Second),
 		// add name
 		chromedp.Text(HOTEL_NAME_PATH, &name, chromedp.ByQuery),
 		// add address
@@ -412,7 +412,7 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 						}
 					}
 					chromedp.Click(ROOM_MODAL_CLOSE_BTN_PATH, chromedp.ByQuery).Do(ctx)
-					chromedp.Sleep(3 * time.Second).Do(ctx)
+					chromedp.Sleep(1 * time.Second).Do(ctx)
 				}
 
 				// occupancy
