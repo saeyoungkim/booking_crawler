@@ -258,6 +258,7 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 
 	if err := chromedp.Run(ctx,
 		chromedp.Navigate(accommodationLink),
+		chromedp.Sleep(5*time.Second),
 		// add name
 		chromedp.Text(HOTEL_NAME_PATH, &name, chromedp.ByQuery),
 		// add address
