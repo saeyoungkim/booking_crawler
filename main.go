@@ -143,7 +143,7 @@ func searchAccomodationLinks(ctx context.Context, destination string, checkin st
 
 				return nil
 			}),
-			chromedp.Nodes(`div[aria-label="Property"] a`, &accommodations, chromedp.ByQueryAll),
+			chromedp.Nodes(`a[data-testid="availability-cta-btn"]`, &accommodations, chromedp.ByQueryAll),
 		)
 
 		if err != nil {
@@ -490,7 +490,7 @@ func main() {
 	children := 0
 	rooms := 1
 
-	city := "Ameritania at Times Square"
+	city := "NewYork"
 
 	from := "2024-10-10"
 	to := "2024-10-11"
