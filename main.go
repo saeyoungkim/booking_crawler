@@ -16,7 +16,7 @@ import (
 )
 
 const PAGE_LOAD = 25
-const DIALOG_PATH = `div[role="dialog"]`
+const DIALOG_PATH = `div.bui-modal--active div[role="dialog"]`
 const DIALOG_CLOSE_PATH = `div[role="dialog"] > div > div > div > div > button`
 const LOAD_BUTTON_XPATH = "//span[text()='Load more results']"
 const HOTEL_NAME_PATH = "div#hp_hotel_name h2"
@@ -24,23 +24,23 @@ const END_LAYOUT_PATH = "div.bottom_of_basiclayout"
 const FOOTER_PATH = "#footer_menu_track"
 const TAG_PATH = `span[data-testid="facility-icon"] ~ div > span > div > span`
 const DESCRIPTION_PATH = `p[data-testid="property-description"]`
-const AVAIALABILITY_PATH = `table#hprt-table > tbody tr`
+const AVAIALABILITY_PATH = `table#hprt-table tbody tr`
 const ROOMTYPE_CELL_PATH = "td.hprt-table-cell-roomtype"
-const OCCUPANCY_CELL_PATH = "td.hprt-table-cell-occupancy"
 const ADULTS_OCCUPANCY_PATH = "span.c-occupancy-icons__adults > i"
 const CHILDREN_OCCUPANCY_PATH = "span.c-occupancy-icons__children > i"
-const OCCUPANCY_PATH = "div.hprt-occupancy-occupancy-info > span.bui-u-sr-only"
+const OCCUPANCY_PATH = "td.hprt-table-cell-occupancy span.bui-u-sr-only"
 const PRICE_CELL_PATH = "td.hprt-table-cell-price"
 const CONDITIONS_CELL_PATH = "td.hprt-table-cell-conditions"
 const ROOM_MODAL_OPEN_PATH = `a.hprt-roomtype-link`
 const ROOM_MODAL_PATH = `div[role="dialog"] > div[data-component="hotel/new-rooms-table/lightbox"]`
-const ROOM_NAME_PATH = "h1#hp_rt_room_gallery_modal_room_name"
+const ROOM_NAME_PATH = "span.hprt-roomtype-icon-link"
 const ROOM_DETAIL_CONTAINER = `div.hprt-lightbox-right-container`
 const ROOM_SIZE_PATH = `//div[class="hprt-lightbox-right-container"]/h2[1]/following-sibling::text()[1]`
 const ROOM_DETAIL_CONTAINER_IF_NO_PICTURE = `div.hprt-lightbox-left-container`
 const ROOM_SIZE_PATH_IF_NO_PICTURE = `//div[class="hprt-lightbox-left-container"]/h2[1]/following-sibling::text()[1]`
 const ROOM_TYPE_PATH = `div.hprt-roomtype-bed`
-const ROOM_TAGS_PATH = `div.hprt-facilities-facility`
+const ROOM_TAGS_DIV_PATH = `div.hprt-facilities-facility`
+const ROOM_TAGS_SPAN_PATH = `span.hprt-facilities-facility`
 const FEE_PATH = `div.prd-taxes-and-fees-under-price`
 const CANCELATION_PATH = `ul li.e2e-cancellation`
 const ROOM_MODAL_CLOSE_BTN_PATH = "button.modal-mask-closeBtn"
@@ -86,7 +86,7 @@ func searchAccomodationLinks(ctx context.Context, destination string, checkin st
 		return nil, err
 	}
 
-	// prevLen := 0
+	prevLen := 0
 
 	log.Println("=====================================")
 	log.Println("SCROLLING START")
@@ -103,53 +103,53 @@ func searchAccomodationLinks(ctx context.Context, destination string, checkin st
 			return nil, err
 		}
 
-		if len(accommodations) > 0 {
+		if prevLen == len(accommodations) {
 			break
 		}
 
-		// if prevLen == len(accommodations) {
-		// 	break
-		// }
+		prevLen = len(accommodations)
 
-		// prevLen = len(accommodations)
+		lastId := []cdp.NodeID{accommodations[len(accommodations)-1].NodeID}
 
-		// lastId := []cdp.NodeID{accommodations[len(accommodations)-1].NodeID}
-
-		// if err2 := chromedp.Run(ctx,
-		// 	chromedp.ScrollIntoView(lastId, chromedp.ByNodeID),
-		// ); err2 != nil {
-		// 	return nil, err2
-		// }
+		if err2 := chromedp.Run(ctx,
+			chromedp.ScrollIntoView(lastId, chromedp.ByNodeID),
+		); err2 != nil {
+			return nil, err2
+		}
 	}
 
-	// log.Println("=====================================")
-	// log.Println("SCROLLING END")
-	// log.Println("=====================================")
+	log.Println("=====================================")
+	log.Println("SCROLLING END")
+	log.Println("=====================================")
 
-	// log.Println("=====================================")
-	// log.Println("LOADING BUTTON START")
-	// log.Println("=====================================")
+	log.Println("=====================================")
+	log.Println("LOADING BUTTON START")
+	log.Println("=====================================")
 
-	// for {
-	// 	if err := clickMoreAccomodationsBtn(ctx); err != nil {
-	// 		return nil, err
-	// 	}
+	var isEnd = false
+	for !isEnd {
+		err := chromedp.Run(ctx,
+			chromedp.ActionFunc(func(ctx context.Context) error {
+				var btnNodes []*cdp.Node
 
-	// 	err := chromedp.Run(ctx,
-	// 		chromedp.Sleep(5*time.Second),
-	// 		chromedp.Nodes(`div[aria-label="Property"] a`, &accommodations, chromedp.ByQueryAll),
-	// 	)
+				chromedp.Nodes(LOAD_BUTTON_XPATH, &btnNodes, chromedp.BySearch, chromedp.AtLeast(0)).Do(ctx)
 
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
+				if len(btnNodes) == 0 {
+					isEnd = true
+				} else {
+					chromedp.Click([]cdp.NodeID{btnNodes[0].NodeID}, chromedp.ByNodeID).Do(ctx)
+					chromedp.Sleep(5 * time.Second).Do(ctx)
+				}
 
-	// 	if prevLen+PAGE_LOAD > len(accommodations) {
-	// 		break
-	// 	}
+				return nil
+			}),
+			chromedp.Nodes(`div[aria-label="Property"] a`, &accommodations, chromedp.ByQueryAll),
+		)
 
-	// 	prevLen = len(accommodations)
-	// }
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	log.Println("=====================================")
 	log.Println("LOADING BUTTON END")
@@ -243,9 +243,9 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 	var description string
 
 	var roomType string = ""
-	var roomName string
-	// var roomSize string
-	var roomTags []string
+	var roomName string = ""
+	var roomTags []string = nil
+
 	var price float64
 
 	var canCancelFree bool
@@ -353,7 +353,7 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var availabilityNodes []*cdp.Node
 
-			if err := chromedp.Nodes(AVAIALABILITY_PATH, &availabilityNodes, chromedp.ByQueryAll).Do(ctx); err != nil {
+			if err := chromedp.Nodes(AVAIALABILITY_PATH, &availabilityNodes, chromedp.ByQueryAll, chromedp.AtLeast(0)).Do(ctx); err != nil {
 				return err
 			}
 
@@ -365,54 +365,33 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 				if len(td) > 0 {
 					// roomType
 					chromedp.Text(ROOM_TYPE_PATH, &roomType, chromedp.ByQuery, chromedp.FromNode(td[0]), chromedp.AtLeast(0)).Do(ctx)
+					chromedp.Text(ROOM_NAME_PATH, &roomName, chromedp.ByQuery, chromedp.FromNode(td[0]), chromedp.AtLeast(0)).Do(ctx)
+					// chromedp.Text(ROOM_SIZE_PATH, &roomSize, chromedp.BySearch).Do(ctx)
 
-					if roomType == "" {
-						continue
-					}
-
-					// clear
 					roomTags = nil
 
-					chromedp.Click(ROOM_MODAL_OPEN_PATH, chromedp.ByQuery, chromedp.FromNode(availabilityNode)).Do(ctx)
-					chromedp.WaitVisible(ROOM_MODAL_PATH, chromedp.ByQuery).Do(ctx)
+					var roomTagDivNodes []*cdp.Node = nil
+					chromedp.Nodes(ROOM_TAGS_DIV_PATH, &roomTagDivNodes, chromedp.ByQueryAll, chromedp.FromNode(td[0]), chromedp.AtLeast(0)).Do(ctx)
 
-					var dialogNodes []*cdp.Node
-					chromedp.Nodes(ROOM_DETAIL_DIALOG_PATH, &dialogNodes, chromedp.ByQuery, chromedp.AtLeast(0)).Do(ctx)
+					for _, roomTagNode := range roomTagDivNodes {
+						tmp := ""
+						chromedp.Text([]cdp.NodeID{roomTagNode.NodeID}, &tmp, chromedp.ByNodeID).Do(ctx)
 
-					if len(dialogNodes) > 0 {
-						chromedp.Text(ROOM_NAME_PATH, &roomName, chromedp.ByQuery, chromedp.FromNode(dialogNodes[0])).Do(ctx)
-
-						var containerNodes []*cdp.Node
-						chromedp.Nodes(ROOM_DETAIL_CONTAINER, &containerNodes, chromedp.ByQueryAll, chromedp.FromNode(dialogNodes[0]), chromedp.AtLeast(0)).Do(ctx)
-
-						if len(containerNodes) > 0 {
-							// chromedp.Text(ROOM_SIZE_PATH, &roomSize, chromedp.BySearch).Do(ctx)
-
-							var roomTagNodes []*cdp.Node
-							chromedp.Nodes(ROOM_TAGS_PATH, &roomTagNodes, chromedp.ByQueryAll, chromedp.FromNode(containerNodes[0])).Do(ctx)
-
-							for _, roomTagNode := range roomTagNodes {
-								roomTags = append(roomTags, "")
-								chromedp.Text([]cdp.NodeID{roomTagNode.NodeID}, &roomTags[len(roomTags)-1], chromedp.ByNodeID).Do(ctx)
-							}
-						} else {
-							// chromedp.Nodes(ROOM_DETAIL_CONTAINER_IF_NO_PICTURE, &containerNodes, chromedp.ByQueryAll, chromedp.FromNode(dialogNodes[0]), chromedp.AtLeast(0)).Do(ctx)
-
-							// chromedp.Text(ROOM_SIZE_PATH_IF_NO_PICTURE, &roomSize, chromedp.BySearch).Do(ctx)
-
-							if len(containerNodes) > 0 {
-								var roomTagNodes []*cdp.Node
-								chromedp.Nodes(ROOM_TAGS_PATH, &roomTagNodes, chromedp.ByQueryAll, chromedp.FromNode(containerNodes[0])).Do(ctx)
-
-								for _, roomTagNode := range roomTagNodes {
-									roomTags = append(roomTags, "")
-									chromedp.Text([]cdp.NodeID{roomTagNode.NodeID}, &roomTags[len(roomTags)-1], chromedp.ByNodeID).Do(ctx)
-								}
-							}
+						if len(tmp) > 0 {
+							roomTags = append(roomTags, tmp)
 						}
 					}
-					chromedp.Click(ROOM_MODAL_CLOSE_BTN_PATH, chromedp.ByQuery).Do(ctx)
-					chromedp.Sleep(1 * time.Second).Do(ctx)
+
+					var roomTagSpanNodes []*cdp.Node = nil
+					chromedp.Nodes(ROOM_TAGS_SPAN_PATH, &roomTagSpanNodes, chromedp.ByQueryAll, chromedp.FromNode(td[0]), chromedp.AtLeast(0)).Do(ctx)
+					for _, roomTagNode := range roomTagSpanNodes {
+						tmp := ""
+						chromedp.Text([]cdp.NodeID{roomTagNode.NodeID}, &tmp, chromedp.ByNodeID).Do(ctx)
+
+						if len(tmp) > 0 {
+							roomTags = append(roomTags, tmp)
+						}
+					}
 				}
 
 				// occupancy
@@ -451,32 +430,34 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 
 				price = roomPrice + roomCharge
 
-				// open free cancellation and Meals
-				chromedp.Click(POLICY_MODAL_OPEN_PATH, chromedp.ByQuery, chromedp.FromNode(availabilityNode)).Do(ctx)
-				chromedp.WaitVisible(POLICY_MODAL_PATH, chromedp.ByQuery).Do(ctx)
+				conditions := ""
 
-				var dialogNodes []*cdp.Node
-				chromedp.Nodes(DIALOG_PATH, &dialogNodes, chromedp.ByQuery).Do(ctx)
+				chromedp.Text(CONDITIONS_CELL_PATH, &conditions, chromedp.ByQuery, chromedp.FromNode(availabilityNode)).Do(ctx)
 
-				if len(dialogNodes) > 0 {
-					var mealPlan string
-					var cancelation string
+				isIncludeBreakfast = strings.Contains(conditions, "Breakfast") || strings.Contains(conditions, "breakfast")
+				canCancelFree = strings.Contains(conditions, "Free cancellation")
 
-					chromedp.Text(MEAL_DESCRPTION_PATH, &mealPlan).Do(ctx)
-					chromedp.Text(CANCELATION_SUMMARY_PATH, &cancelation).Do(ctx)
+				// // open free cancellation and Meals
+				// chromedp.Click(POLICY_MODAL_OPEN_PATH, chromedp.ByQuery, chromedp.FromNode(availabilityNode)).Do(ctx)
+				// chromedp.WaitVisible(POLICY_MODAL_PATH, chromedp.ByQuery).Do(ctx)
 
-					isIncludeBreakfast = !(strings.Contains(mealPlan, "No meal is included") || strings.Contains(mealPlan, "breakfast costs"))
-					canCancelFree = strings.Contains(cancelation, "Free cancellation")
+				// var dialogNodes []*cdp.Node
+				// chromedp.Nodes(DIALOG_PATH, &dialogNodes, chromedp.ByQuery).Do(ctx)
 
-					var cancellationNodes []*cdp.Node
-					chromedp.Nodes(FREE_CANCELATION_STRONG_PATH, &cancellationNodes, chromedp.BySearch, chromedp.FromNode(dialogNodes[0])).Do(ctx)
+				// if len(dialogNodes) > 0 {
+				// 	var mealPlan string
+				// 	var cancelation string
 
-					canCancelFree = len(cancellationNodes) > 0
+				// 	chromedp.Text(MEAL_DESCRPTION_PATH, &mealPlan).Do(ctx)
+				// 	chromedp.Text(CANCELATION_SUMMARY_PATH, &cancelation).Do(ctx)
 
-					chromedp.Click(POLICY_MODAL_CLOSE_BTN_PATH, chromedp.ByQuery).Do(ctx)
-					// chromedp.Sleep(3 * time.Second).Do(ctx)
-					chromedp.WaitNotPresent(POLICY_MODAL_PATH, chromedp.ByQuery).Do(ctx)
-				}
+				// 	isIncludeBreakfast = !(strings.Contains(mealPlan, "No meal is included") || strings.Contains(mealPlan, "breakfast costs"))
+				// 	canCancelFree = strings.Contains(cancelation, "Free cancellation")
+
+				// 	chromedp.Click(POLICY_MODAL_CLOSE_BTN_PATH, chromedp.ByQuery).Do(ctx)
+				// 	// chromedp.Sleep(3 * time.Second).Do(ctx)
+				// 	chromedp.WaitNotPresent(POLICY_MODAL_PATH, chromedp.ByQuery).Do(ctx)
+				// }
 
 				makeRoomRow(
 					room_summary,
@@ -509,7 +490,7 @@ func main() {
 	children := 0
 	rooms := 1
 
-	city := "Newyork"
+	city := "Ameritania at Times Square"
 
 	from := "2024-10-10"
 	to := "2024-10-11"
