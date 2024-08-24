@@ -251,8 +251,8 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 	var canCancelFree bool
 	var isIncludeBreakfast bool
 
-	var allScore float64
-	var allReviewes int64
+	var allScore float64 = 0.0
+	var allReviewes int64 = 0.0
 
 	var categoryReviews []data.CategoryReview
 
@@ -301,29 +301,33 @@ func getInformation(ctx context.Context, accommodationLink string, adults int, c
 		chromedp.Text(DESCRIPTION_PATH, &description, chromedp.ByQuery),
 		// export reviews
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			var scoreStr string
+			var scoreStr string = ""
 
-			chromedp.Text(ALL_REVIEW_SCORE_PATH, &scoreStr, chromedp.ByQuery).Do(ctx)
+			chromedp.Text(ALL_REVIEW_SCORE_PATH, &scoreStr, chromedp.ByQuery, chromedp.AtLeast(0)).Do(ctx)
 
-			var scoreParsed = strings.Split(strings.ReplaceAll(scoreStr, "\r\n", "\n"), "\n")[1]
+			if scoreStr != "" {
+				var scoreParsed = strings.Split(strings.ReplaceAll(scoreStr, "\r\n", "\n"), "\n")[1]
 
-			reviewScore, _ := strconv.ParseFloat(scoreParsed, 64)
+				reviewScore, _ := strconv.ParseFloat(scoreParsed, 64)
 
-			allScore = reviewScore
+				allScore = reviewScore
+			}
 
-			var reviewCountStr string
+			var reviewCountStr string = ""
 
-			chromedp.Text(ALL_REVIEW_COUNT_PATH, &reviewCountStr, chromedp.ByQuery).Do(ctx)
+			chromedp.Text(ALL_REVIEW_COUNT_PATH, &reviewCountStr, chromedp.ByQuery, chromedp.AtLeast(0)).Do(ctx)
 
-			reviewCountStrReplaced := strings.Replace(strings.Split(reviewCountStr, " ")[0], ",", "", 1)
+			if reviewCountStr != "" {
+				reviewCountStrReplaced := strings.Replace(strings.Split(reviewCountStr, " ")[0], ",", "", 1)
 
-			reviewCount, _ := strconv.ParseInt(reviewCountStrReplaced, 0, 32)
+				reviewCount, _ := strconv.ParseInt(reviewCountStrReplaced, 0, 32)
 
-			allReviewes = reviewCount
+				allReviewes = reviewCount
+			}
 
 			var subScoreNodes []*cdp.Node
 
-			chromedp.Nodes(REVIEW_SUBSCORE_PATH, &subScoreNodes, chromedp.ByQueryAll).Do(ctx)
+			chromedp.Nodes(REVIEW_SUBSCORE_PATH, &subScoreNodes, chromedp.ByQueryAll, chromedp.AtLeast(0)).Do(ctx)
 
 			for _, subScoreNode := range subScoreNodes {
 				var subCategoryScoreTmp string
